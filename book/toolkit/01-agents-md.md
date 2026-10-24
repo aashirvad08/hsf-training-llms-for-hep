@@ -94,7 +94,7 @@ Long documentation stays out too. The whole file sits in the model's context for
 
 Stale content is worse than none. If the file says `make test` and the Makefile was removed last month, the agent runs it and, when it fails, starts improvising. Treat `AGENTS.md` as living documentation and change it in the same commit as the command it describes. When an agent makes the same mistake twice, add a line. When a line has not mattered for months, delete it.
 
-Instructions that only matter for one kind of task, such as a long checklist for producing systematics plots, fit better in a skill. Skills and agent memory are covered in later chapters of this Toolkit section.
+Instructions that only matter for one kind of task, such as a long checklist for producing systematics plots, fit better in a skill. Skills are covered in the [next chapter](02-skills.md), and agent memory in a later chapter of this Toolkit section.
 
 ## A worked example
 
