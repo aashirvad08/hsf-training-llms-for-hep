@@ -47,9 +47,9 @@ Notes on the CLI:
 
 - `deploy.yml`: on push to `main`, sets up Python + Node, runs `jupyter book build --execute --html --strict` in `book/` with `BASE_URL=/<repo-name>` (needed for GitHub Pages sub-path hosting), and publishes `book/_build/html` to GitHub Pages.
 - `tests.yml`: on PRs and pushes to `main`, runs the same strict build (so broken pages/notebooks are caught before merge) and then pytest (currently a no-op).
-- `check-links.yaml`: markdown link checker; exclusions are in `mlc_config.json`.
+- `check-links.yml`: checks the links in all Markdown files with [lychee](https://github.com/lycheeverse/lychee-action) on PRs, pushes to `main` and monthly; exclusions go in `.lycheeignore`.
 - `codespell.txt` is the codespell ignore-list (used by pre-commit.ci).
-- `.github/config.yml`, `stale.yml`, and `dependabot.yml` are centrally maintained by the HSF training maintenance repo — don't edit them here.
+- `.github/config.yml`, `stale.yml`, and `dependabot.yml` follow the org templates in [hsf-training-ai-maintenance](https://github.com/hsf-training/hsf-training-ai-maintenance); keep them in line with those when editing.
 
 ## Other notes
 
