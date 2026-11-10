@@ -57,17 +57,23 @@ A rule that must never be broken stays in `AGENTS.md`, even when a skill repeats
 
 ## How skills are loaded
 
-The standard calls its loading scheme progressive disclosure. It has three stages.
+An agent does not read every installed skill in full when a session starts. It reads each skill in three stages, and reads more only when it needs to. The specification calls this *progressive disclosure*.
 
 Discovery happens when a session starts. The agent finds the installed skills and reads only their frontmatter, so each skill adds a name and a description to its context, roughly 50 to 100 tokens.
 
-Activation happens when your request matches a description, and the agent reads that skill's whole `SKILL.md`. In most tools the model makes this decision itself; there is no keyword matching. You can also activate a skill by name, for example `/publication-plots` in Claude Code or `$publication-plots` in Codex.
+Activation happens when your request matches a description, and the agent reads that skill's whole `SKILL.md`. In most tools the model makes this decision itself; there is no keyword matching. You can also activate a skill by name, for example `@publication-plots` in OpenCode, `/publication-plots` in Claude Code or `$publication-plots` in Codex.
 
 In execution the agent follows the instructions and opens the other files only when it reaches them: it runs `scripts/plot_stack.py` at the step that says so, and reads a file in `references/` only if told to.
 
 So thirty installed skills cost thirty descriptions, a few thousand tokens, in each session, and their bodies cost nothing until used. Pasted into `AGENTS.md`, the same thirty procedures would cost all of their text on every turn. The specification recommends keeping the body of `SKILL.md` under 500 lines and about 5000 tokens, with longer material in `references/`.
 
-The catalogue has a budget, though: Codex gives it 2% of the context window and shortens descriptions when it overflows, and Claude Code gives it 1% and drops the descriptions of the skills you use least. Put the main use case first in the description. Loaded skills stay in the conversation without being reread, and when Claude Code compacts a long conversation it keeps only the first 5000 tokens of each, so the important instructions go near the top.
+Each tool handles the list of names and descriptions, often called the catalogue, in its own way. OpenCode, which we use in this course, sends the model an up-to-date catalogue at every step. It holds the ID, name and description of each skill the agent is allowed to use, but not the body. The ID comes from the skill's folder path, as explained below. Skills without a description are left out. To load a skill, the model calls OpenCode's `skill` tool with the skill's ID, and OpenCode adds the body of `SKILL.md` to the conversation.
+
+You decide which skills OpenCode offers with `skill` rules in its permission settings. With `allow` a skill is offered and loaded without asking, with `ask` OpenCode asks you before loading it, and with `deny` the model never sees it. The rules match skill IDs and can use wildcards, such as `internal-*`. The [OpenCode skills page](https://opencode.ai/docs/skills/) gives the configuration.
+
+OpenCode's documentation mentions no limit on the size of the catalogue. Other tools give it a fixed budget. Codex gives it 2% of the context window and shortens descriptions when it overflows. Claude Code gives it 1% and drops the descriptions of the skills you use least. In any tool, put the main use case first in the description.
+
+A skill that has been loaded stays in the conversation and is not read again. When Claude Code compacts a long conversation, it keeps only the first 5000 tokens of each loaded skill, so put the important instructions near the top.
 
 ## The SKILL.md format
 
@@ -82,13 +88,15 @@ The [specification](https://agentskills.io/specification) is short. The frontmat
 | `metadata` | No | A map of string keys to string values, for anything else. |
 | `allowed-tools` | No | Experimental: tools the skill may use without asking, separated by spaces. Support varies. |
 
-So `publication-plots` is a valid name, while `Publication-Plots`, `-plots` and `publication--plots` are not, and neither is `publication-plots` in a folder called `plots`.
+The rules for `name` are set out in the [specification of the `name` field](https://agentskills.io/specification#name-field). By these rules, `publication-plots` is a valid name, while `Publication-Plots`, `-plots` and `publication--plots` are not, and neither is `publication-plots` in a folder called `plots`.
+
+Not every tool enforces these rules. [OpenCode's documentation](https://opencode.ai/docs/skills/) says that it does not check the pattern, the length or whether `name` matches the folder. It takes the skill's ID from the folder path and uses `name` only as a label. When we tried OpenCode 1.14.17 in November 2026, it listed a skill in a folder with a different name, and one with an uppercase name, without any warning. Follow the specification anyway, so that your skills also work in stricter tools, and check them with `skills-ref`, described below.
 
 The body has no required structure; the specification suggests steps, examples of input and output, and edge cases. Refer to other files by paths relative to the skill folder, one level deep, so the agent doesn't have to follow a chain of documents.
 
-YAML is where most broken skills break. `metadata` values must be strings, so write `version: "1.0"` with quotes. A one-line description containing a colon, such as `description: Use when: the user asks for plots`, is invalid YAML. Claude Code then loads the body with empty metadata: the skill runs when called by name but never triggers on its own, and nothing tells you why. Use a block scalar (`description: >-` and indented lines) for anything longer than a phrase. The reference validator [skills-ref](https://github.com/agentskills/agentskills/tree/main/skills-ref), a demonstration library, catches both mistakes and the naming errors above with `skills-ref validate path/to/skill`.
+YAML is where most broken skills break. `metadata` values must be strings, so write `version: "1.0"` with quotes. A one-line description containing a colon, such as `description: Use when: the user asks for plots`, is invalid YAML. Claude Code then loads the body with empty metadata: the skill runs when called by name but never triggers on its own, and nothing tells you why. OpenCode 1.14.17 read the same line without complaint, so a skill can work for you and break for a colleague who uses another tool. Use a block scalar (`description: >-` and indented lines) for anything longer than a phrase. The reference validator [skills-ref](https://github.com/agentskills/agentskills/tree/main/skills-ref), a demonstration library, catches both mistakes and the naming errors above with `skills-ref validate path/to/skill`.
 
-Many tools accept more than the specification and add fields of their own. Claude Code treats `name` as optional and understands `disable-model-invocation` and `paths`, which other tools ignore. Stick to the specification unless your whole group uses one tool.
+Many tools accept more than the specification and add fields of their own. Claude Code treats `name` as optional and understands `disable-model-invocation` and `paths`. OpenCode also understands `disable-model-invocation`, and has its own `opencode/autoinvoke` key under `metadata` for the same purpose. Other tools may ignore these fields. Stick to the specification unless your whole group uses one tool.
 
 ## Writing the description
 
@@ -147,7 +155,7 @@ ln -s ../../.agents/skills/publication-plots .claude/skills/publication-plots
 
 Claude Code follows symlinked skill folders, but remember the Windows problem from the AGENTS.md chapter: without `core.symlinks`, the link is checked out as a small text file.
 
-When two skills share a name, the tools disagree about which wins: Claude Code prefers your personal one over the project's, while Codex lists both. Give your skills distinct names.
+When two skills share a name, the tools disagree about which wins. Claude Code prefers your personal one over the project's, and Codex lists both. OpenCode reads its locations in a fixed order, given in its documentation, and the skill it reads last wins. Give your skills distinct names.
 
 We checked these paths against each tool's documentation in October 2026, and they change from release to release. The [client list on agentskills.io](https://agentskills.io/clients) links to the current skills page of each supported tool.
 
@@ -499,7 +507,7 @@ Documenting an old module nobody maintains, say a Fortran routine inside the rec
 
 ## Existing skills
 
-Collaborations have started writing their own skills. The notes from the HSF LLMs for HEP hackathon, 28 September 2026, list ["Skills for Mu2e"](https://github.com/Mu2e/aitools) among the training material that already exists. It is a public repository with skills for building the Mu2e offline software, editing FHiCL configuration, finding data with SAM or metacat and reviewing pull requests, and most of them use `compatibility` and a quoted `metadata.version` in their frontmatter, as in the example above.
+Collaborations have started writing their own skills. [Skills for Mu2e](https://github.com/Mu2e/aitools) is a public repository with skills for building the Mu2e offline software, editing FHiCL configuration, finding data with SAM or metacat and reviewing pull requests. Most of them use `compatibility` and a quoted `metadata.version` in their frontmatter, as in the example above.
 
 General collections such as [anthropics/skills](https://github.com/anthropics/skills) and [openai/skills](https://github.com/openai/skills) are worth reading for their structure before you write your own, even if none of their skills fits your work. Read the section on pitfalls below before installing any of them, or anything a colleague sends you.
 
@@ -516,7 +524,7 @@ Write a skill for a small analysis task, then check that it loads on a matching 
    - Opposite-charge pair
 
    The efficiency of each step is relative to the one before. Put the skill in `.agents/skills/cutflow/`, or in `.claude/skills/cutflow/` for Claude Code. Whether you bundle a script is up to you.
-3. Start your agent in the repository and check that it lists the skill (`/skills` in most tools). If it doesn't, check the folder name, the file name (`SKILL.md`, in capitals) and the frontmatter.
+3. Start your agent in the repository and check that it lists the skill (`/skills` in most tools; for OpenCode, run `opencode debug skill` in a terminal). If it doesn't, check the folder name, the file name (`SKILL.md`, in capitals) and the frontmatter.
 4. In a fresh session, give it this prompt word for word:
 
    > How many events survive each step of the dimuon selection? I need the numbers for a slide.
@@ -641,7 +649,7 @@ We ran steps 4 and 5 word for word with Claude Code only, in October 2026, three
 
 ## Pitfalls and responsible use
 
-A skill can run code. Installing one gives your agent someone else's instructions and scripts, which it will run with your permissions, usually including your grid proxy and your batch account. Install skills only from sources you trust, and read the `SKILL.md` and every script before the first use, as you would a setup script. If you copy one from GitHub, pin the commit and read the diff on each update.
+A skill can run code. When you install one, your agent follows someone else's instructions and runs their scripts under your user account. The skill is not given any credentials, but it does not need them: its scripts can do anything you can do from that terminal. They can read your files, use your grid proxy if you have one active, or submit batch jobs in your name. Install skills only from sources you trust, and read the `SKILL.md` and every script before the first use, as you would a setup script. If you copy one from GitHub, pin the commit and read the diff on each update.
 
 Project skills arrive with a clone: start an agent in a colleague's repository and their skills are in its catalogue. Not every tool asks whether you trust the folder first, and Claude Code's documentation warns that a project skill's `allowed-tools` grant applies in a `-p` run even in a folder you never trusted. Look in `.agents/skills/` and `.claude/skills/` before running an agent in a repository you cloned.
 
@@ -649,7 +657,7 @@ No tokens, passwords or paths to credential files belong in a skill's text or sc
 
 hist and mplhep change between releases and the luminosity gets updated after a new calibration, so a skill written against the old state goes stale. A wrong skill does more harm than none, because the agent follows it with confidence. Keep project skills in the analysis repository, change them in the same pull request as the code or configuration they describe, and review them like code; a `CODEOWNERS` entry for `.agents/skills/` helps. Numbers that change, like the luminosity, belong in a file the analysis already reads, so that a recalibration is a one-line change in one place.
 
-A skill is guidance, not a guardrail. The agent may not load it at all, and when it does, it can skip a step or lose part of the text when a long conversation is compacted. The blinding check in `plot_stack.py` only helps when the agent runs `plot_stack.py`. Anything that must not happen needs the measures from the AGENTS.md chapter: a sandbox, read-only data and permission settings. For a skill with side effects, such as one that submits jobs, Claude Code's `disable-model-invocation: true` stops the model loading it by itself.
+A skill is guidance, not a guardrail. The agent may not load it at all, and when it does, it can skip a step or lose part of the text when a long conversation is compacted. The blinding check in `plot_stack.py` only helps when the agent runs `plot_stack.py`. Anything that must not happen needs the measures from the AGENTS.md chapter: a sandbox, read-only data and permission settings. For a skill with side effects, such as one that submits jobs, set `disable-model-invocation: true`, which both Claude Code and OpenCode understand. The model then no longer loads the skill by itself, and you call it by name when you need it. In OpenCode you can also give the skill an `ask` permission rule, so that it asks you before each load.
 
 You stay responsible for the output. A skill makes it more likely that the plot has the right label; it does not make the plot right. Check the label and the luminosity yourself before the plot goes into the note, and treat a cutflow produced through a skill like any other numbers: compare it with something you trust.
 
